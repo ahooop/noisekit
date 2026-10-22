@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noisekit"
+version = "0.1.0"
+description = "环境噪声监测与留证：实时声级、频谱、超标录音与报告"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "NoiseKit contributors" }]
+keywords = ["acoustics", "noise", "spl", "sound-level-meter", "audio"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+audio = ["sounddevice>=0.4.6"]
+gui = ["PySide6>=6.6"]
+dev = ["pytest>=8", "pytest-qt>=4.4", "ruff>=0.5"]
+
+[project.scripts]
+noisekit = "audio_core.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["audio_core*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
