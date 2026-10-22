@@ -4,14 +4,17 @@
 
 插上麦克风就能连续测环境噪声：实时看分贝曲线与频谱，超过阈值自动留证（前置缓冲录音 + 时间 + 峰值），一键导出可分享的报告。
 
-> 状态：**v0.1.0 开发中**。分析引擎与 CLI 已可用（M1.0），桌面界面进行中。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
+![NoiseKit 主界面](docs/screenshot.png)
 
-现在就能用命令行测：
+> 状态：**v0.1.0 开发中**。分析引擎、CLI 与桌面界面已可用（M1.0 / M1.1），告警留证与报告导出在做（M1.2）。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
+
+三种用法：
 
 ```bash
-python -m audio_core.cli --source device          # 用麦克风，终端实时刷新
+python -m apps.desktop.main                       # 桌面界面（推荐）
+python -m apps.desktop.main --synthetic           # 没有麦克风时用模拟信号看界面
+python -m audio_core.cli --source device          # 终端里实时刷新
 python -m audio_core.cli --doctor                 # 排障
-python -m audio_core.cli --list-devices           # 选设备
 python -m audio_core.cli --calibrate 94.0         # 用参考声压级校准
 ```
 

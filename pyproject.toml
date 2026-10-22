@@ -32,7 +32,7 @@ dev = ["pytest>=8", "pytest-qt>=4.4", "ruff>=0.5"]
 noisekit = "audio_core.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["audio_core*"]
+include = ["audio_core*", "apps*"]
 
 [tool.ruff]
 line-length = 100

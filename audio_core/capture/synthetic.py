@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 
 import numpy as np
@@ -13,7 +14,8 @@ class SyntheticSource:
     """生成正弦或高斯白噪。
 
     * ``kind="sine"``：``amplitude`` 是峰值幅度，满量程 1.0 对应 −3.01 dBFS；
-    * ``kind="white"``：``amplitude`` 是标准差，读数约为 ``20·log10(amplitude)`` dBFS。
+    * ``kind="white"``：``amplitude`` 是标准差，读数约为 ``20·log10(amplitude)`` dBFS；
+    * ``realtime=True`` 时按真实时间节奏产出，用于界面演示；测试里保持全速。
     """
 
     channels = 1
@@ -26,6 +28,7 @@ class SyntheticSource:
         amplitude: float = 1.0,
         duration: float | None = None,
         seed: int = 0,
+        realtime: bool = False,
     ) -> None:
         if kind not in KINDS:
             raise ValueError(f"kind 必须是 {KINDS} 之一，收到 {kind!r}")
@@ -36,6 +39,7 @@ class SyntheticSource:
         self.freq = float(freq)
         self.amplitude = float(amplitude)
         self.duration = duration
+        self.realtime = realtime
         self.block_frames = max(256, round(0.01 * self.sample_rate))
         self._rng = np.random.default_rng(seed)
         self._phase = 0.0
@@ -52,12 +56,17 @@ class SyntheticSource:
     def blocks(self) -> Iterator[np.ndarray]:
         total = None if self.duration is None else int(round(self.duration * self.sample_rate))
         produced = 0
+        started = time.monotonic()
         while True:
             n = self.block_frames
             if total is not None:
                 if produced >= total:
                     return
                 n = min(n, total - produced)
+            if self.realtime:
+                delay = started + produced / self.sample_rate - time.monotonic()
+                if delay > 0:
+                    time.sleep(delay)
             yield self._next_block(n)
             produced += n
 
