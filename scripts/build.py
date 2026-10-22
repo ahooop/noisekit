@@ -18,6 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from _console import ensure_utf8_console
+
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
@@ -64,6 +66,7 @@ def portaudio_data_dir() -> Path:
 
 
 def main() -> int:
+    ensure_utf8_console()
     data_dir = portaudio_data_dir()
     if not data_dir.exists():
         print(f"找不到 PortAudio 目录：{data_dir}", file=sys.stderr)

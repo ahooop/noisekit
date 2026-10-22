@@ -7,17 +7,11 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 import sys
 from pathlib import Path
 
-# Windows 控制台默认编码可能装不下中文
-for _stream in (sys.stdout, sys.stderr):
-    _encoding = (getattr(_stream, "encoding", "") or "").lower()
-    if _encoding and _encoding.replace("-", "") != "utf8":
-        with contextlib.suppress(Exception):
-            _stream.reconfigure(encoding="utf-8", errors="replace")
+from _console import ensure_utf8_console
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -54,6 +48,7 @@ def _load_fonts(app: QApplication) -> None:
 
 
 def main() -> int:
+    ensure_utf8_console()
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "docs/screenshot.png")
     out.parent.mkdir(parents=True, exist_ok=True)
 
