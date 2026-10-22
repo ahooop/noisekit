@@ -49,25 +49,23 @@ jobs:
           pip install -e ".[dev,audio,gui]" pyinstaller
       - name: 打包
         run: python scripts/build.py
-      - name: 冒烟测试打包产物
+      - name: 冒烟测试打包产物（冻结依赖）
         shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: |
-          # GUI 子系统的 exe 在 PowerShell 里不会等待，直接执行会「假成功」。
-          # 必须显式 WaitForExit 并检查退出码。
-          # 冷启动在 CI 上很慢（杀软逐 DLL 扫描），超时给足 300 秒。
+          # GUI 子系统的 exe 在 PowerShell 里不会等待，必须显式 WaitForExit。
+          # 这里跑 --selftest-cli：不创建窗口，只验证冻结包里的
+          # numpy / scipy / audio_core / PortAudio 都被正确打进去。
+          # 界面链路由 tests/test_gui.py 在三平台上用源码覆盖。
           $log = Join-Path $env:RUNNER_TEMP 'selftest.log'
-          # 通过环境变量把日志路径传给子进程（子进程会继承父进程环境）
           $env:NOISEKIT_SELFTEST_LOG = $log
           $psi = New-Object System.Diagnostics.ProcessStartInfo
           $psi.FileName = (Resolve-Path 'dist\NoiseKit\NoiseKit.exe').Path
-          $psi.Arguments = '--selftest'
+          $psi.Arguments = '--selftest-cli'
           $psi.UseShellExecute = $false
           $psi.RedirectStandardOutput = $true
           $psi.RedirectStandardError = $true
           $proc = [System.Diagnostics.Process]::Start($psi)
-          $finished = $proc.WaitForExit(300000)
+          $finished = $proc.WaitForExit(180000)
           if (-not $finished) {
             $proc.Kill()
           }

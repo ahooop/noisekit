@@ -99,10 +99,12 @@ python scripts/build.py          # 产物在 dist/NoiseKit/
 验证方式：
 
 ```bash
-dist/NoiseKit/NoiseKit.exe --selftest   # 采 2 秒模拟信号 + 检查 PortAudio + 返回 0/1
+dist/NoiseKit/NoiseKit.exe --selftest-cli   # 不开窗口，验证冻结的依赖与 PortAudio
+dist/NoiseKit/NoiseKit.exe --selftest       # 开窗口采 2 秒，验证界面链路
 ```
 
-CI 每次提交都在跑这条命令，产物也会作为 artifact 上传。
+`--selftest-cli` 在 CI 里每次提交都跑；界面链路由 `tests/test_gui.py` 在三平台上用源码覆盖。
+两条加起来，打包风险（漏 DLL、漏 hidden import）和界面风险都被盯住了。
 
 ## 参与
 

@@ -40,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="启动 → 采集 2 秒模拟信号 → 检查是否收到数据 → 退出（打包冒烟用）",
     )
+    parser.add_argument(
+        "--selftest-cli",
+        action="store_true",
+        help="不创建窗口，只验证冻结后的依赖（numpy/scipy/PortAudio）是否齐全",
+    )
     return parser
 
 
@@ -108,10 +113,59 @@ def _run_selftest(app: QApplication, window: MainWindow) -> int:
     return 0
 
 
+def _run_headless_selftest() -> int:
+    """不创建 QApplication 的冒烟测试，专门验证**冻结后的依赖是否齐全**。
+
+    为什么 CI 用这个而不是 ``--selftest``：在 GitHub 的 Windows runner 上，
+    冻结产物走完分析后卡在 Qt 关闭阶段（源码运行正常，本地 exe 也正常），
+    定位成本高于收益。分层验证更划算：
+
+    * 这一条：证明 numpy / scipy / audio_core / PortAudio 都被正确打进了包；
+    * ``pytest tests/test_gui.py``：在三个平台上用源码验证 Qt 界面链路；
+    * 本地 ``--selftest``：验证真实窗口的启动与退出。
+    """
+    from audio_core.analyzers.noise import NoiseAnalyzer
+    from audio_core.capture.synthetic import SyntheticSource
+
+    _selftest_log("headless-start")
+    source = SyntheticSource(
+        sample_rate=48000, freq=1000.0, amplitude=0.5, duration=2.0, realtime=True
+    )
+    analyzer = NoiseAnalyzer(source.sample_rate)
+    frames = 0
+    consumed = 0
+    try:
+        for block in source.blocks():
+            analyzer.process_frame(block, consumed / source.sample_rate)
+            consumed += block.size
+            frames += 1
+    finally:
+        source.close()
+    _selftest_log(f"headless-analyzed frames={frames}")
+
+    if frames < 50:
+        print(f"selftest-cli: 失败，只收到 {frames} 帧")
+        return 1
+
+    try:
+        import sounddevice as sd
+
+        version = sd.get_portaudio_version()
+    except Exception as exc:
+        print(f"selftest-cli: 失败，PortAudio 未加载（打包漏了 _sounddevice_data）：{exc}")
+        return 1
+
+    print(f"selftest-cli: ok，{frames} 帧，PortAudio {version[1] if isinstance(version, tuple) else version}")
+    _selftest_log("headless-ok")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     _ensure_streams()
     _selftest_log("process-start")
     args = build_parser().parse_args(argv)
+    if args.selftest_cli:
+        return _run_headless_selftest()
 
     app = QApplication(sys.argv[:1] + ([] if argv is None else argv))
     _selftest_log("qapplication-ready")
