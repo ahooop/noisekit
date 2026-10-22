@@ -26,7 +26,7 @@ dependencies = [
 [project.optional-dependencies]
 audio = ["sounddevice>=0.4.6"]
 gui = ["PySide6>=6.6"]
-dev = ["pytest>=8", "pytest-qt>=4.4", "ruff>=0.5"]
+dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]
 noisekit = "audio_core.cli:main"
