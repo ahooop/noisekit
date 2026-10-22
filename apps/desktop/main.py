@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
@@ -42,7 +43,24 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _selftest_log(message: str) -> None:
+    """把冒烟测试的进度写进文件。
+
+    ``--windowed`` 下 stdout 被丢弃，进程若卡死，CI 里只能看到「超时」。
+    有这个文件才知道它卡在哪一步。
+    """
+    path = os.environ.get("NOISEKIT_SELFTEST_LOG")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(f"{time.time():.1f} {message}\n")
+    except OSError:
+        pass
+
+
 def _run_selftest(app: QApplication, window: MainWindow) -> int:
+    _selftest_log("ui-ready")
     index = window.device_combo.findData("synthetic")
     if index < 0:
         print("selftest: 失败，找不到模拟信号源")
@@ -56,15 +74,18 @@ def _run_selftest(app: QApplication, window: MainWindow) -> int:
         print("selftest: 失败，工作线程没有启动")
         return 1
     window._worker.frame_ready.connect(received.append)
+    _selftest_log("worker-started")
 
     QTimer.singleShot(2500, app.quit)
     app.exec()
+    _selftest_log(f"loop-exited frames={len(received)}")
 
     worker = window._worker
     if worker is not None:
         worker.stop()
         worker.wait(3000)
     window.close()
+    _selftest_log("closed")
 
     if not received:
         print("selftest: 失败，没有收到任何指标帧")
@@ -89,13 +110,16 @@ def _run_selftest(app: QApplication, window: MainWindow) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     _ensure_streams()
+    _selftest_log("process-start")
     args = build_parser().parse_args(argv)
 
     app = QApplication(sys.argv[:1] + ([] if argv is None else argv))
+    _selftest_log("qapplication-ready")
     app.setApplicationName("NoiseKit")
     app.setStyleSheet(STYLE_SHEET)
 
     window = MainWindow()
+    _selftest_log("window-built")
     if args.synthetic:
         index = window.device_combo.findData("synthetic")
         if index >= 0:

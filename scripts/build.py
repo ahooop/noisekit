@@ -56,6 +56,14 @@ EXCLUDES = (
     "h5py",
     "tables",
     "numexpr",
+    # 文档与序列化库：PySide6/scipy 的 hook 会顺手拉进来，但运行时用不到
+    "sphinx",
+    "docutils",
+    "jinja2",
+    "PIL",
+    "lxml",
+    "cryptography",
+    "pygments",
 )
 
 

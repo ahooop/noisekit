@@ -10,7 +10,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'pytest', 'IPython', 'notebook', 'jupyter', 'PyQt5', 'PyQt6', 'torch', 'torchvision', 'cv2', 'transformers', 'onnxruntime', 'duckdb', 'openvino', 'pandas', 'babel', 'matplotlib', 'numba', 'llvmlite', 'sympy', 'sklearn', 'tensorflow', 'jax', 'h5py', 'tables', 'numexpr'],
+    excludes=['tkinter', 'pytest', 'IPython', 'notebook', 'jupyter', 'PyQt5', 'PyQt6', 'torch', 'torchvision', 'cv2', 'transformers', 'onnxruntime', 'duckdb', 'openvino', 'pandas', 'babel', 'matplotlib', 'numba', 'llvmlite', 'sympy', 'sklearn', 'tensorflow', 'jax', 'h5py', 'tables', 'numexpr', 'sphinx', 'docutils', 'jinja2', 'PIL', 'lxml', 'cryptography', 'pygments'],
     noarchive=False,
     optimize=0,
 )

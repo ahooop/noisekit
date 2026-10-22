@@ -56,6 +56,10 @@ jobs:
         run: |
           # GUI 子系统的 exe 在 PowerShell 里不会等待，直接执行会「假成功」。
           # 必须显式 WaitForExit 并检查退出码。
+          # 冷启动在 CI 上很慢（杀软逐 DLL 扫描），超时给足 300 秒。
+          $log = Join-Path $env:RUNNER_TEMP 'selftest.log'
+          # 通过环境变量把日志路径传给子进程（子进程会继承父进程环境）
+          $env:NOISEKIT_SELFTEST_LOG = $log
           $psi = New-Object System.Diagnostics.ProcessStartInfo
           $psi.FileName = (Resolve-Path 'dist\NoiseKit\NoiseKit.exe').Path
           $psi.Arguments = '--selftest'
@@ -63,12 +67,15 @@ jobs:
           $psi.RedirectStandardOutput = $true
           $psi.RedirectStandardError = $true
           $proc = [System.Diagnostics.Process]::Start($psi)
-          if (-not $proc.WaitForExit(120000)) {
+          $finished = $proc.WaitForExit(300000)
+          if (-not $finished) {
             $proc.Kill()
-            throw 'selftest 超时未退出'
           }
           Write-Host $proc.StandardOutput.ReadToEnd()
           Write-Host $proc.StandardError.ReadToEnd()
+          Write-Host '--- selftest 阶段日志 ---'
+          if (Test-Path $log) { Get-Content $log } else { Write-Host '(没有日志，进程可能没跑起来)' }
+          if (-not $finished) { throw 'selftest 超时未退出' }
           if ($proc.ExitCode -ne 0) {
             throw "selftest 失败，退出码 $($proc.ExitCode)"
           }
