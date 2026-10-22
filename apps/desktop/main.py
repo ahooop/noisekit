@@ -17,17 +17,17 @@ from PySide6.QtWidgets import QApplication
 
 from apps.desktop.theme import STYLE_SHEET
 from apps.desktop.windows import MainWindow
+from audio_core.console import ensure_utf8_console
 
 
 def _ensure_streams() -> None:
-    """``--windowed`` 打包后 sys.stdout/stderr 是 None，print() 会直接抛异常。
+    """``--windowed`` 打包后 sys.stdout/stderr 可能是 None。
 
-    打包冒烟测试就靠 print 报告结果，这里给个黑洞兜底，避免连日志都没地方写。
+    同时要处理另一种情况：输出被重定向到管道时 stdout 不是 None，
+    但编码是 cp1252，一句中文 ``print`` 就会抛异常——在 windowed 程序里
+    这会变成「弹出错误对话框然后卡死」。
     """
-    if sys.stdout is None:
-        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
-    if sys.stderr is None:
-        sys.stderr = sys.stdout
+    ensure_utf8_console()
 
 
 def build_parser() -> argparse.ArgumentParser:

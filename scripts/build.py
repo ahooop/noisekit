@@ -18,9 +18,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _console import ensure_utf8_console
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from audio_core.console import ensure_utf8_console  # noqa: E402
+
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
 NAME = "NoiseKit"

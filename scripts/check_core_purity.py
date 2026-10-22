@@ -9,10 +9,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from _console import ensure_utf8_console
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+from audio_core.console import ensure_utf8_console  # noqa: E402
 
 FORBIDDEN = ("PySide6", "PyQt5", "PyQt6", "tkinter", "app.desktop")
-ROOT = Path(__file__).resolve().parents[1] / "audio_core"
+ROOT = ROOT_DIR / "audio_core"
 
 
 def find_violations() -> list[str]:

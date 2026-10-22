@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import sys
 import time
 
@@ -215,12 +214,10 @@ def _calibrate(source, ref_spl: float) -> int:
 
 
 def _ensure_utf8_console() -> None:
-    """Windows 控制台默认可能是 GBK，中文提示会变乱码。"""
-    stream = sys.stdout
-    encoding = (getattr(stream, "encoding", "") or "").lower()
-    if encoding and encoding.replace("-", "") != "utf8":
-        with contextlib.suppress(Exception):
-            stream.reconfigure(encoding="utf-8", errors="replace")
+    """兼容旧调用点：真正的实现在 audio_core.console。"""
+    from .console import ensure_utf8_console
+
+    ensure_utf8_console()
 
 
 def main(argv: list[str] | None = None) -> int:

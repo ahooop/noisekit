@@ -11,7 +11,9 @@ import os
 import sys
 from pathlib import Path
 
-from _console import ensure_utf8_console
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from audio_core.console import ensure_utf8_console  # noqa: E402
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
