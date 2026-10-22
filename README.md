@@ -50,7 +50,7 @@ sessions/20261022-233000/
 - 留证录音：**5 秒前置缓冲** + 事件全程 + 5 秒后置，16-bit WAV
 - 数据落盘：SQLite（WAL）批量写，崩溃后已有数据仍可读、可导出
 - 导出：CSV 指标表 + **单文件** HTML 报告（内联 SVG，零外部依赖，双击即看）
-- 手动校准：输入参考声压级反算偏移，未校准时全程标注「相对」
+- 手动校准 + **校准向导**：填参考声压级、采 2 秒、自动算偏移；配置随设备一起记住
 
 不在 v0.1 范围：音乐分析、语音转写、设备频响测试、云同步、移动端。
 
@@ -81,6 +81,28 @@ python -m apps.desktop.main                       # 图形界面
 ```
 
 要求 Python ≥ 3.11。音频后端依赖 PortAudio（`sounddevice` 会自动带上）。
+
+## 打包成可双击的程序
+
+```bash
+pip install pyinstaller
+python scripts/build.py          # 产物在 dist/NoiseKit/
+```
+
+整个 `dist/NoiseKit/` 目录拷到没装 Python 的机器上，双击 `NoiseKit.exe` 就能用。
+
+打包有两个必踩的坑，脚本里都处理了：
+
+- `sounddevice` 在**运行时**才去 `_sounddevice_data` 里加载 PortAudio DLL，PyInstaller 的静态分析看不见这一步。漏了的表现是「程序能启动，但一个设备都找不到」，所以必须 `--add-data` 显式带上。
+- `--windowed` 打包后 `sys.stdout` 是 `None`，一句 `print` 就能让程序崩掉，入口里做了兜底。
+
+验证方式：
+
+```bash
+dist/NoiseKit/NoiseKit.exe --selftest   # 采 2 秒模拟信号 + 检查 PortAudio + 返回 0/1
+```
+
+CI 每次提交都在跑这条命令，产物也会作为 artifact 上传。
 
 ## 参与
 

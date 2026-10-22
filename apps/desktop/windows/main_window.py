@@ -11,6 +11,7 @@ from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QGridLayout,
     QGroupBox,
@@ -24,10 +25,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apps.desktop.dialogs import CalibrationDialog
 from apps.desktop.theme import TEXT_DIM, WARN
 from apps.desktop.widgets import LevelMeter, SpectrumView, TimeSeriesView
 from apps.desktop.worker import AnalysisWorker
-from audio_core import __version__
+from audio_core import __version__, config
 from audio_core.capture.devices import list_devices
 
 SYNTHETIC_LABEL = "模拟：1 kHz 正弦（无需麦克风）"
@@ -56,6 +58,55 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._reload_devices()
+        self._config = config.load()
+        self._apply_config()
+
+    # ------------------------------------------------------------------ 配置
+
+    def _apply_config(self) -> None:
+        cfg = self._config
+        if cfg.device_index is not None:
+            index = self.device_combo.findData(cfg.device_index)
+            if index >= 0:
+                self.device_combo.setCurrentIndex(index)
+        self.calibration_spin.setValue(cfg.calibration_offset)
+        self.calibrated_combo.setCurrentIndex(1 if cfg.calibrated else 0)
+        self.threshold_spin.setValue(cfg.threshold)
+        if cfg.window_width >= 800 and cfg.window_height >= 600:
+            self.resize(cfg.window_width, cfg.window_height)
+
+    def _current_config(self) -> config.AppConfig:
+        device = self.device_combo.currentData()
+        return config.AppConfig(
+            device_index=device if isinstance(device, int) else None,
+            calibrated=self.calibrated_combo.currentIndex() == 1,
+            calibration_offset=self.calibration_spin.value(),
+            threshold=self.threshold_spin.value(),
+            window_width=self.width(),
+            window_height=self.height(),
+        )
+
+    def _save_config(self) -> None:
+        with contextlib.suppress(Exception):
+            config.save(self._current_config())
+
+    def _open_calibration(self) -> None:
+        if self._worker is not None:
+            QMessageBox.information(self, "请先停止", "校准需要独占麦克风，请先停止当前采集。")
+            return
+        device = self.device_combo.currentData()
+        if device == "synthetic":
+            QMessageBox.information(
+                self, "无法校准", "模拟信号没有物理声压，请选择一个真实输入设备。"
+            )
+            return
+        dialog = CalibrationDialog(device, 48000, self)
+        if dialog.exec() == QDialog.Accepted and dialog.offset is not None:
+            self.calibration_spin.setValue(dialog.offset)
+            self.calibrated_combo.setCurrentIndex(1)
+            self.threshold_spin.setValue(65.0)
+            self._save_config()
+            self.statusBar().showMessage(f"校准完成：偏移 {dialog.offset:+.1f} dB")
 
     # ------------------------------------------------------------------ 构建
 
@@ -65,7 +116,7 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(14, 12, 14, 10)
         root.setSpacing(10)
 
-        # 顶部控制条
+        # 第一行：设备与运行控制
         controls = QHBoxLayout()
         controls.setSpacing(8)
 
@@ -77,30 +128,6 @@ class MainWindow(QMainWindow):
         self.refresh_button = QPushButton("刷新")
         self.refresh_button.clicked.connect(self._reload_devices)
         controls.addWidget(self.refresh_button)
-
-        controls.addWidget(QLabel("校准偏移"))
-        self.calibration_spin = QDoubleSpinBox()
-        self.calibration_spin.setRange(-200.0, 200.0)
-        self.calibration_spin.setDecimals(1)
-        self.calibration_spin.setSingleStep(0.5)
-        self.calibration_spin.setValue(0.0)
-        self.calibration_spin.setToolTip(
-            "dB SPL = dBFS + 偏移。留 0 并在下方取消「已校准」，读数将标注为相对值。"
-        )
-        controls.addWidget(self.calibration_spin)
-
-        self.calibrated_combo = QComboBox()
-        self.calibrated_combo.addItems(["未校准（相对值）", "已校准（dB SPL）"])
-        self.calibrated_combo.currentIndexChanged.connect(self._on_calibration_mode_changed)
-        controls.addWidget(self.calibrated_combo)
-
-        controls.addWidget(QLabel("阈值"))
-        self.threshold_spin = QDoubleSpinBox()
-        self.threshold_spin.setRange(-120.0, 200.0)
-        self.threshold_spin.setDecimals(0)
-        self.threshold_spin.setValue(-30.0)
-        self.threshold_spin.setToolTip("超过该值并持续 3 秒即留证；未校准时为相对 dB")
-        controls.addWidget(self.threshold_spin)
 
         self.start_button = QPushButton("开始")
         self.start_button.clicked.connect(self.start)
@@ -123,6 +150,40 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.report_button)
 
         root.addLayout(controls)
+
+        # 第二行：校准与阈值
+        settings_row = QHBoxLayout()
+        settings_row.setSpacing(8)
+
+        settings_row.addWidget(QLabel("校准偏移"))
+        self.calibration_spin = QDoubleSpinBox()
+        self.calibration_spin.setRange(-200.0, 200.0)
+        self.calibration_spin.setDecimals(1)
+        self.calibration_spin.setSingleStep(0.5)
+        self.calibration_spin.setValue(0.0)
+        self.calibration_spin.setToolTip("dB SPL = dBFS + 偏移。不知道填什么就用右边的「校准向导」。")
+        settings_row.addWidget(self.calibration_spin)
+
+        self.calibrated_combo = QComboBox()
+        self.calibrated_combo.addItems(["未校准（相对值）", "已校准（dB SPL）"])
+        self.calibrated_combo.currentIndexChanged.connect(self._on_calibration_mode_changed)
+        settings_row.addWidget(self.calibrated_combo)
+
+        self.calibrate_button = QPushButton("校准向导…")
+        self.calibrate_button.clicked.connect(self._open_calibration)
+        settings_row.addWidget(self.calibrate_button)
+
+        settings_row.addSpacing(16)
+        settings_row.addWidget(QLabel("阈值"))
+        self.threshold_spin = QDoubleSpinBox()
+        self.threshold_spin.setRange(-120.0, 200.0)
+        self.threshold_spin.setDecimals(0)
+        self.threshold_spin.setValue(-30.0)
+        self.threshold_spin.setToolTip("超过该值并持续 3 秒即留证；未校准时为相对 dB")
+        settings_row.addWidget(self.threshold_spin)
+        settings_row.addStretch(1)
+
+        root.addLayout(settings_row)
 
         # 电平表
         self.level_meter = LevelMeter()
@@ -153,10 +214,10 @@ class MainWindow(QMainWindow):
 
         # 事件留证
         self.event_list = QListWidget()
-        self.event_list.setMaximumHeight(90)
+        self.event_list.setMaximumHeight(62)
         self.event_list.addItem("暂无超标事件")
         events_box = QGroupBox("超标事件（自动留证）")
-        events_box.setMaximumHeight(132)
+        events_box.setMaximumHeight(104)
         events_layout = QVBoxLayout(events_box)
         events_layout.setContentsMargins(6, 4, 6, 6)
         events_layout.addWidget(self.event_list)
@@ -242,6 +303,7 @@ class MainWindow(QMainWindow):
         self._fps_timer.start()
 
         self._session = self._open_session(source, offset)
+        self._save_config()
 
         worker = AnalysisWorker(source, calibration_offset=offset, session=self._session)
         worker.frame_ready.connect(self._on_frame)
@@ -370,6 +432,7 @@ class MainWindow(QMainWindow):
         self._fps_frames = 0
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        self._save_config()
         if self._worker is not None:
             self._worker.stop()
             self._worker.wait(2000)

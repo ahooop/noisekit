@@ -33,3 +33,46 @@ jobs:
         run: pytest -q
       - name: 架构约束（audio_core 不得依赖 Qt）
         run: python scripts/check_core_purity.py
+
+  package:
+    name: package (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,audio,gui]" pyinstaller
+      - name: 打包
+        run: python scripts/build.py
+      - name: 冒烟测试打包产物
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          # GUI 子系统的 exe 在 PowerShell 里不会等待，直接执行会「假成功」。
+          # 必须显式 WaitForExit 并检查退出码。
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = (Resolve-Path 'dist\NoiseKit\NoiseKit.exe').Path
+          $psi.Arguments = '--selftest'
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $proc = [System.Diagnostics.Process]::Start($psi)
+          if (-not $proc.WaitForExit(120000)) {
+            $proc.Kill()
+            throw 'selftest 超时未退出'
+          }
+          Write-Host $proc.StandardOutput.ReadToEnd()
+          Write-Host $proc.StandardError.ReadToEnd()
+          if ($proc.ExitCode -ne 0) {
+            throw "selftest 失败，退出码 $($proc.ExitCode)"
+          }
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoiseKit-windows
+          path: dist/NoiseKit
