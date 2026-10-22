@@ -71,15 +71,16 @@ def _run_selftest(app: QApplication, window: MainWindow) -> int:
         return 1
 
     # 打包最常见的坑：分析链路正常，但 PortAudio 没打进去 → 一个设备都打不开。
-    # 这里显式验证后端能加载，让 CI 在打包阶段就发现问题。
-    from audio_core.capture.devices import backend_info, list_devices
+    # 这里只验证 DLL 能加载（get_portaudio_version 不枚举硬件），
+    # 不用 query_devices：CI 的 runner 没有声卡，枚举可能长时间不返回。
+    try:
+        import sounddevice as sd
 
-    info = backend_info()
-    if info.get("backend") == "unavailable":
-        print("selftest: 失败，PortAudio 未加载（打包漏了 _sounddevice_data）")
-        print(f"  诊断：{info}")
+        version = sd.get_portaudio_version()
+    except Exception as exc:
+        print(f"selftest: 失败，PortAudio 未加载（打包漏了 _sounddevice_data）：{exc}")
         return 1
-    print(f"selftest: PortAudio {info['backend']}，输入设备 {len(list_devices())} 个")
+    print(f"selftest: PortAudio {version[1] if isinstance(version, tuple) else version}")
 
     last = received[-1]
     print(f"selftest: ok，收到 {len(received)} 帧，最后一帧 dB(A)={last.db_a:.1f}")

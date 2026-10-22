@@ -129,3 +129,27 @@ def test_device_source_yields_when_data_arrives() -> None:
     block = next(source.blocks())
     assert block.size == 100
     np.testing.assert_array_equal(block, np.arange(100, dtype=np.float32))
+
+
+def test_list_devices_is_bounded(monkeypatch) -> None:
+    """PortAudio 枚举卡死时不能把主窗口一起拖死。"""
+    import time
+
+    from audio_core.capture import devices
+
+    def stuck() -> list:
+        time.sleep(3.0)
+        return []
+
+    monkeypatch.setattr(devices, "_query_devices", stuck)
+    started = time.monotonic()
+    assert devices.list_devices(timeout=0.2) == []
+    assert time.monotonic() - started < 1.5
+
+
+def test_list_devices_returns_snapshot(monkeypatch) -> None:
+    from audio_core.capture import devices
+
+    sample = [devices.DeviceInfo(0, "假设备", 1, 48000.0, True)]
+    monkeypatch.setattr(devices, "_query_devices", lambda: sample)
+    assert devices.list_devices(timeout=2.0) == sample

@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
+
+DEVICE_QUERY_TIMEOUT = 3.0
 
 
 @dataclass(frozen=True)
@@ -30,8 +33,26 @@ def sounddevice_available() -> bool:
     return True
 
 
-def list_devices() -> list[DeviceInfo]:
-    """返回所有具备输入通道的设备；后端不可用时返回空列表。"""
+def list_devices(timeout: float | None = DEVICE_QUERY_TIMEOUT) -> list[DeviceInfo]:
+    """返回所有具备输入通道的设备；后端不可用时返回空列表。
+
+    ``query_devices()`` 是 PortAudio 的 C 调用：驱动异常、没有声卡、
+    某些远程桌面会话下会**一直不返回**。它被主窗口构造时调用，
+    一旦阻塞就是「双击没反应」——所以放在可超时的线程里跑。
+    """
+    if timeout is None:
+        return _query_devices()
+
+    box: list[list[DeviceInfo]] = []
+    thread = threading.Thread(target=lambda: box.append(_query_devices()), daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        return []  # 放弃等待；线程是 daemon，不会拖住进程退出
+    return box[0] if box else []
+
+
+def _query_devices() -> list[DeviceInfo]:
     try:
         import sounddevice as sd
 
