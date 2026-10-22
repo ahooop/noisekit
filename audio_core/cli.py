@@ -19,6 +19,7 @@ from . import __version__
 from .analyzers import available as available_analyzers
 from .analyzers.noise import NoiseAnalyzer
 from .capture.devices import backend_info, find_device, list_devices, sounddevice_available
+from .capture.source import SourceError
 from .dsp.framing import mean_square
 from .dsp.level import calibration_offset, mean_square_to_db
 
@@ -202,6 +203,9 @@ def main(argv: list[str] | None = None) -> int:
                 break
     except KeyboardInterrupt:
         print()
+    except SourceError as exc:
+        print(f"\n采集中断：{exc}", file=sys.stderr)
+        return 3
     finally:
         source.close()
     if sys.stdout.isatty():

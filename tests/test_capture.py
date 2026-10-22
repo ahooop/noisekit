@@ -91,3 +91,41 @@ def test_wav_source_roundtrip(tmp_path) -> None:
 def test_wav_source_missing_file(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         WavFileSource(tmp_path / "nope.wav")
+
+
+def test_device_source_times_out_instead_of_hanging() -> None:
+    """设备打开成功但没有任何回调时，必须报错而不是永远空转。"""
+    import threading
+
+    from audio_core.capture.ring import RingBuffer
+    from audio_core.capture.source import SourceError
+    from audio_core.capture.stream import SoundDeviceSource
+
+    source = SoundDeviceSource.__new__(SoundDeviceSource)
+    source.block_frames = 480
+    source.device = "fake-device"
+    source.idle_timeout = 0.05
+    source._ring = RingBuffer(capacity=4800)
+    source._closed = threading.Event()
+
+    with pytest.raises(SourceError, match="没有收到任何音频"):
+        next(source.blocks())
+
+
+def test_device_source_yields_when_data_arrives() -> None:
+    import threading
+
+    from audio_core.capture.ring import RingBuffer
+    from audio_core.capture.stream import SoundDeviceSource
+
+    source = SoundDeviceSource.__new__(SoundDeviceSource)
+    source.block_frames = 100
+    source.device = "fake-device"
+    source.idle_timeout = 1.0
+    source._ring = RingBuffer(capacity=1000)
+    source._closed = threading.Event()
+    source._ring.write(np.arange(500, dtype=np.float32))
+
+    block = next(source.blocks())
+    assert block.size == 100
+    np.testing.assert_array_equal(block, np.arange(100, dtype=np.float32))
