@@ -6,8 +6,16 @@ CI 与本地测试都会跑它。
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
+
+# Windows 控制台默认可能是 cp1252/cp936，中文输出会抛 UnicodeEncodeError
+for _stream in (sys.stdout, sys.stderr):
+    _encoding = (getattr(_stream, "encoding", "") or "").lower()
+    if _encoding and _encoding.replace("-", "") != "utf8":
+        with contextlib.suppress(Exception):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
 
 FORBIDDEN = ("PySide6", "PyQt5", "PyQt6", "tkinter", "app.desktop")
 ROOT = Path(__file__).resolve().parents[1] / "audio_core"

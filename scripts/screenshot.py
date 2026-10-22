@@ -7,9 +7,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 from pathlib import Path
+
+# Windows 控制台默认编码可能装不下中文
+for _stream in (sys.stdout, sys.stderr):
+    _encoding = (getattr(_stream, "encoding", "") or "").lower()
+    if _encoding and _encoding.replace("-", "") != "utf8":
+        with contextlib.suppress(Exception):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
