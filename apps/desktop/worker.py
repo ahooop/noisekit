@@ -25,6 +25,7 @@ SPECTRUM_INTERVAL = 0.1
 class AnalysisWorker(QThread):
     frame_ready = Signal(object)  # FrameMetrics
     spectrum_ready = Signal(object, object)  # freqs, db
+    event_ready = Signal(str, object)  # kind("start"/"end"), NoiseEvent
     failed = Signal(str)
     stopped = Signal(float)  # 分析过的音频秒数
 
@@ -33,11 +34,13 @@ class AnalysisWorker(QThread):
         source,
         calibration_offset: float | None = None,
         fps: float = 30.0,
+        session=None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.source = source
         self.calibration_offset = calibration_offset
+        self.session = session
         self.min_interval = 1.0 / max(fps, 1.0)
         self._stop = threading.Event()
         self._audio_tail = np.zeros(SPECTRUM_FRAMES, dtype=np.float32)
@@ -59,6 +62,10 @@ class AnalysisWorker(QThread):
                     break
                 frame = analyzer.process_frame(block, consumed / sample_rate)
                 consumed += int(block.size)
+
+                if self.session is not None:
+                    for note in self.session.feed(block, frame):
+                        self.event_ready.emit(note.kind, note.event)
 
                 self._audio_tail = np.concatenate((self._audio_tail, block))[-SPECTRUM_FRAMES:]
 

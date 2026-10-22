@@ -50,6 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list-devices", action="store_true", help="列出输入设备")
     parser.add_argument("--doctor", action="store_true", help="打印环境诊断信息")
     parser.add_argument("--analyzers", action="store_true", help="列出分析器")
+    parser.add_argument(
+        "--session-dir",
+        metavar="DIR",
+        help="把会话存进该目录：session.db + audio/ 留证录音 + report.html",
+    )
+    parser.add_argument(
+        "--threshold", type=float, help="告警阈值（dB）；校准后默认 65，未校准默认 -30"
+    )
+    parser.add_argument("--trigger", type=float, default=3.0, help="超阈值持续秒数（默认 3）")
+    parser.add_argument("--pre-roll", type=float, default=5.0, help="前置缓冲秒数（默认 5）")
+    parser.add_argument("--post-roll", type=float, default=5.0, help="后置缓冲秒数（默认 5）")
+    parser.add_argument("--cooldown", type=float, default=10.0, help="事件冷却秒数（默认 10）")
     return parser
 
 
@@ -118,16 +130,69 @@ def _cmd_analyzers() -> int:
     return 0
 
 
-def _format_frame(frame: dict) -> str:
-    suffix = "" if frame["spl_a"] is not None else " (相对)"
-    level = frame["spl_a"] if frame["spl_a"] is not None else frame["db_a"]
+def _format_frame(frame) -> str:
+    suffix = "" if frame.spl_a is not None else " (相对)"
     return (
-        f"L={level:7.1f}{suffix}  "
-        f"LAF={frame['laf']:7.1f}  "
-        f"Leq1s={frame['leq_1s']:7.1f}  "
-        f"Leq10s={frame['leq_10s']:7.1f}  "
-        f"峰={frame['lcpeak']:7.1f}"
+        f"L={frame.display_level():7.1f}{suffix}  "
+        f"LAF={frame.laf:7.1f}  "
+        f"Leq1s={frame.leq_1s:7.1f}  "
+        f"Leq10s={frame.leq_10s:7.1f}  "
+        f"峰={frame.lcpeak:7.1f}"
     )
+
+
+def _device_label(source, args: argparse.Namespace) -> str:
+    if args.source == "synthetic":
+        return f"模拟信号 {args.freq:.0f} Hz"
+    if args.source == "wav":
+        return f"WAV {args.wav}"
+    return f"设备 {getattr(source, 'device', '默认')}"
+
+
+def _open_session(args: argparse.Namespace, source):
+    if not args.session_dir:
+        return None
+    from .session import RecordingSession
+
+    calibrated = args.calibration_offset is not None
+    threshold = args.threshold
+    if threshold is None:
+        threshold = 65.0 if calibrated else -30.0
+    return RecordingSession(
+        root=args.session_dir,
+        device_name=_device_label(source, args),
+        sample_rate=source.sample_rate,
+        calibration_offset=args.calibration_offset,
+        threshold=threshold,
+        trigger_seconds=args.trigger,
+        pre_roll_seconds=args.pre_roll,
+        post_roll_seconds=args.post_roll,
+        cooldown_seconds=args.cooldown,
+    )
+
+
+def _report_notification(note) -> None:
+    event = note.event
+    if note.kind == "start":
+        print(f"\n[事件] 超标开始 t={event.started_at:.1f}s 阈值={event.threshold:.0f}")
+    else:
+        path = event.audio_path or "未录音"
+        print(
+            f"\n[事件] 超标结束 持续 {event.duration:.1f}s 峰值 {event.peak:.1f} 录音={path}"
+        )
+
+
+def _close_session(session) -> None:
+    try:
+        summary = session.close()
+        report = session.export_report()
+        if summary is not None:
+            state = "正常结束" if summary.finished else "未正常结束"
+            print(f"会话 #{summary.id} 已保存（{state}）：{summary.frame_count} 帧指标")
+        print(f"报告：{report}")
+        print(f"录音目录：{session.audio_dir}")
+    except Exception as exc:  # 收尾失败不该吞掉前面的数据
+        print(f"会话收尾失败：{type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 def _calibrate(source, ref_spl: float) -> int:
@@ -182,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             source.close()
 
     analyzer = NoiseAnalyzer(source.sample_rate, calibration_offset=args.calibration_offset)
+    session = _open_session(args, source)
     consumed = 0
     started = time.monotonic()
     last_print = 0.0
@@ -189,8 +255,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for block in source.blocks():
             timestamp = consumed / source.sample_rate
-            frame = analyzer.process(block, timestamp)
+            frame = analyzer.process_frame(block, timestamp)
             consumed += block.size
+            if session is not None:
+                for note in session.feed(block, frame):
+                    _report_notification(note)
             now = time.monotonic()
             if now - last_print >= 0.25:
                 last_print = now
@@ -208,6 +277,8 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     finally:
         source.close()
+        if session is not None:
+            _close_session(session)
     if sys.stdout.isatty():
         print()
     elapsed = time.monotonic() - started
@@ -215,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
         print("没有收到任何音频")
         return 1
     analyzed = consumed / source.sample_rate
-    print(f"分析 {analyzed:.1f} 秒音频（耗时 {elapsed:.1f} 秒），Leq={frame['leq_session']:.1f}")
+    print(f"分析 {analyzed:.1f} 秒音频（耗时 {elapsed:.1f} 秒），Leq={frame.leq_session:.1f}")
     return 0
 
 

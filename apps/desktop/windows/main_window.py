@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+import contextlib
+from datetime import datetime
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QListWidget,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -39,6 +45,8 @@ class MainWindow(QMainWindow):
         self.resize(980, 720)
 
         self._worker: AnalysisWorker | None = None
+        self._session = None
+        self._report_path: Path | None = None
         self._elapsed = 0.0
         self._fps = 0
         self._fps_frames = 0
@@ -83,7 +91,16 @@ class MainWindow(QMainWindow):
 
         self.calibrated_combo = QComboBox()
         self.calibrated_combo.addItems(["未校准（相对值）", "已校准（dB SPL）"])
+        self.calibrated_combo.currentIndexChanged.connect(self._on_calibration_mode_changed)
         controls.addWidget(self.calibrated_combo)
+
+        controls.addWidget(QLabel("阈值"))
+        self.threshold_spin = QDoubleSpinBox()
+        self.threshold_spin.setRange(-120.0, 200.0)
+        self.threshold_spin.setDecimals(0)
+        self.threshold_spin.setValue(-30.0)
+        self.threshold_spin.setToolTip("超过该值并持续 3 秒即留证；未校准时为相对 dB")
+        controls.addWidget(self.threshold_spin)
 
         self.start_button = QPushButton("开始")
         self.start_button.clicked.connect(self.start)
@@ -94,6 +111,16 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self.stop)
         controls.addWidget(self.stop_button)
+
+        self.record_check = QCheckBox("留证记录")
+        self.record_check.setChecked(True)
+        self.record_check.setToolTip("把指标写入 SQLite，超标时保存前置缓冲 + 事件录音，停止后生成报告")
+        controls.addWidget(self.record_check)
+
+        self.report_button = QPushButton("打开报告")
+        self.report_button.setEnabled(False)
+        self.report_button.clicked.connect(self._open_report)
+        controls.addWidget(self.report_button)
 
         root.addLayout(controls)
 
@@ -123,6 +150,17 @@ class MainWindow(QMainWindow):
             grid.addWidget(value, 1, column)
             self._metric_labels[key] = value
         root.addWidget(metrics_box)
+
+        # 事件留证
+        self.event_list = QListWidget()
+        self.event_list.setMaximumHeight(90)
+        self.event_list.addItem("暂无超标事件")
+        events_box = QGroupBox("超标事件（自动留证）")
+        events_box.setMaximumHeight(132)
+        events_layout = QVBoxLayout(events_box)
+        events_layout.setContentsMargins(6, 4, 6, 6)
+        events_layout.addWidget(self.event_list)
+        root.addWidget(events_box)
 
         # 曲线
         self.time_series = TimeSeriesView(window_seconds=300)
@@ -191,7 +229,7 @@ class MainWindow(QMainWindow):
         self.level_meter.set_caption(f"{source.sample_rate} Hz · {source.block_frames} 帧/块")
         self.time_series.set_range(lo, hi)
         self.time_series.set_unit(unit)
-        self.time_series.set_threshold(65.0 if calibrated else -30.0)
+        self.time_series.set_threshold(self.threshold_spin.value())
         self.time_series.clear()
         self.spectrum.clear()
         self.level_meter.reset()
@@ -203,9 +241,12 @@ class MainWindow(QMainWindow):
         self._fps = 0
         self._fps_timer.start()
 
-        worker = AnalysisWorker(source, calibration_offset=offset)
+        self._session = self._open_session(source, offset)
+
+        worker = AnalysisWorker(source, calibration_offset=offset, session=self._session)
         worker.frame_ready.connect(self._on_frame)
         worker.spectrum_ready.connect(self._on_spectrum)
+        worker.event_ready.connect(self._on_event)
         worker.failed.connect(self._on_failed)
         worker.stopped.connect(self._on_stopped)
         self._worker = worker
@@ -215,7 +256,28 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(True)
         self.device_combo.setEnabled(False)
         self.refresh_button.setEnabled(False)
+        self.record_check.setEnabled(False)
         self.statusBar().showMessage("采集中…")
+
+    def _open_session(self, source, offset: float | None):
+        if not self.record_check.isChecked():
+            return None
+        from audio_core.session import RecordingSession
+
+        root = Path.cwd() / "sessions" / datetime.now().strftime("%Y%m%d-%H%M%S")
+        try:
+            session = RecordingSession(
+                root=root,
+                device_name=self.device_combo.currentText(),
+                sample_rate=source.sample_rate,
+                calibration_offset=offset,
+                threshold=self.threshold_spin.value(),
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "无法建立会话", f"{type(exc).__name__}: {exc}")
+            return None
+        self.event_list.clear()
+        return session
 
     def stop(self) -> None:
         if self._worker is None:
@@ -252,6 +314,19 @@ class MainWindow(QMainWindow):
     def _on_spectrum(self, freqs, db) -> None:
         self.spectrum.set_spectrum(freqs, db)
 
+    def _on_event(self, kind: str, event) -> None:
+        if kind == "start":
+            self.event_list.addItem(
+                f"[开始] {event.started_at:7.1f}s 超标（阈值 {event.threshold:.0f}）"
+            )
+        else:
+            name = Path(event.audio_path).name if event.audio_path else "未录音"
+            self.event_list.addItem(
+                f"[结束] {event.started_at:7.1f}s · 持续 {event.duration:.1f}s · "
+                f"峰值 {event.peak:.1f} · {name}"
+            )
+        self.event_list.scrollToBottom()
+
     def _on_failed(self, message: str) -> None:
         self.statusBar().showMessage(f"采集出错：{message}")
         QMessageBox.warning(self, "采集出错", message)
@@ -265,7 +340,30 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         self.device_combo.setEnabled(True)
         self.refresh_button.setEnabled(True)
-        self.statusBar().showMessage(f"已停止，本次分析 {analyzed_seconds:.0f} 秒音频")
+        self.record_check.setEnabled(True)
+
+        message = f"已停止，本次分析 {analyzed_seconds:.0f} 秒音频"
+        if self._session is not None:
+            session, self._session = self._session, None
+            try:
+                summary = session.close()
+                report = session.export_report()
+                self._report_path = report
+                self.report_button.setEnabled(True)
+                events = len(summary.events) if summary else 0
+                message = f"已停止 · 会话 #{summary.id if summary else '?'} 已保存 · 报告：{report}"
+                self.event_list.addItem(f"报告已生成：{report}")
+                del events
+            except Exception as exc:
+                message = f"已停止，但保存失败：{type(exc).__name__}: {exc}"
+        self.statusBar().showMessage(message)
+
+    def _open_report(self) -> None:
+        if self._report_path and self._report_path.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._report_path)))
+
+    def _on_calibration_mode_changed(self, index: int) -> None:
+        self.threshold_spin.setValue(65.0 if index == 1 else -30.0)
 
     def _tick_fps(self) -> None:
         self._fps = self._fps_frames
@@ -276,4 +374,8 @@ class MainWindow(QMainWindow):
             self._worker.stop()
             self._worker.wait(2000)
             self._worker = None
+        if self._session is not None:
+            with contextlib.suppress(Exception):
+                self._session.close()
+            self._session = None
         super().closeEvent(event)

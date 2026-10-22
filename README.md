@@ -6,17 +6,33 @@
 
 ![NoiseKit 主界面](docs/screenshot.png)
 
-> 状态：**v0.1.0 开发中**。分析引擎、CLI 与桌面界面已可用（M1.0 / M1.1），告警留证与报告导出在做（M1.2）。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
+> 状态：**v0.1.0 开发中**。分析引擎、CLI、桌面界面、告警留证与报告导出均已可用（M1.0 → M1.2），还差打包成 exe 与校准向导（M1.3）。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
 
-三种用法：
+四种用法：
 
 ```bash
-python -m apps.desktop.main                       # 桌面界面（推荐）
+python -m apps.desktop.main                       # 桌面界面（推荐，默认自动留证）
 python -m apps.desktop.main --synthetic           # 没有麦克风时用模拟信号看界面
 python -m audio_core.cli --source device          # 终端里实时刷新
+python -m audio_core.cli --source device --session-dir ./今晚   # 留证：录音 + 数据库 + 报告
 python -m audio_core.cli --doctor                 # 排障
 python -m audio_core.cli --calibrate 94.0         # 用参考声压级校准
 ```
+
+## 留证到底留了什么
+
+一次会话会在目录里生成三样东西：
+
+```
+sessions/20261022-233000/
+├── session.db     指标帧（10 Hz）+ 事件表，SQLite
+├── audio/         超标时段的 WAV，含触发前 5 秒
+└── report.html    一页报告：曲线 + 事件表 + 免责声明
+```
+
+前置缓冲是关键：等超过阈值才开始录，录到的第一秒往往已经被削掉，
+回放只剩「响声的尾巴」。所以录音器始终滚动保存最近 5 秒音频，
+事件触发的瞬间把这段一起写进文件。
 
 ## 解决什么问题
 
@@ -26,13 +42,14 @@ python -m audio_core.cli --calibrate 94.0         # 用参考声压级校准
 | 机房 / 工地 / 宿舍需要长期值守 | 24 小时不中断采集，事后回看「几点最吵、峰值多少」 |
 | 搬家租房前想测环境底噪 | 打开即测，实时 dB(A) 与 Leq |
 
-## 规划中的能力
+## 能力
 
 - 实时指标：瞬时 dB、A/C 计权、Fast/Slow 时间计权、Leq(1s/10s/会话)、LAFmax、LCpeak
 - 实时可视化：dB 时间序列曲线、2048 点频谱（对数频率轴）
-- 阈值告警：阈值 + 持续时长触发，含 **5 秒前置缓冲** 的留证录音
-- 数据落盘：会话写 SQLite（WAL），事件音频存 16-bit WAV
-- 导出：CSV 指标表 + 内嵌曲线图的 HTML 报告
+- 阈值告警：阈值 + 持续时长 + 冷却，持续的噪音只算**一次**事件
+- 留证录音：**5 秒前置缓冲** + 事件全程 + 5 秒后置，16-bit WAV
+- 数据落盘：SQLite（WAL）批量写，崩溃后已有数据仍可读、可导出
+- 导出：CSV 指标表 + **单文件** HTML 报告（内联 SVG，零外部依赖，双击即看）
 - 手动校准：输入参考声压级反算偏移，未校准时全程标注「相对」
 
 不在 v0.1 范围：音乐分析、语音转写、设备频响测试、云同步、移动端。

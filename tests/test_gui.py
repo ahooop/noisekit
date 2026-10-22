@@ -32,6 +32,24 @@ def test_main_window_builds(qapp) -> None:
     assert window.device_combo.count() >= 1  # 至少要有「模拟信号」这一项
     assert window.start_button.isEnabled()
     assert not window.stop_button.isEnabled()
+    assert window.record_check.isChecked()
+    assert not window.report_button.isEnabled()
+    window.close()
+
+
+def test_event_list_renders_notifications(qapp) -> None:
+    from audio_core.events.detector import NoiseEvent
+
+    window = MainWindow()
+    window.event_list.clear()
+    window._on_event("start", NoiseEvent(started_at=3.0, threshold=65.0, peak=70.0))
+    event = NoiseEvent(started_at=3.0, threshold=65.0, peak=81.5, ended_at=9.0)
+    event.audio_path = "C:/tmp/event_1.wav"
+    window._on_event("end", event)
+
+    texts = [window.event_list.item(i).text() for i in range(window.event_list.count())]
+    assert any("超标" in t and "开始" in t for t in texts)
+    assert any("81.5" in t and "event_1.wav" in t for t in texts)
     window.close()
 
 

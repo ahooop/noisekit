@@ -17,6 +17,7 @@ build/
 *.db-shm
 recordings/
 reports/
+sessions/
 *.log
 
 # 编辑器 / 系统
