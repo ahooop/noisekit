@@ -1,22 +1,31 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "noisekit"
-version = "0.1.0"
-description = "环境噪声监测与留证：实时声级、频谱、超标录音与报告"
+# 发行名不能叫 noisekit：PyPI 上已被另一个无关项目占用
+# （karamouche/noisekit，语音降噪数据集生成器）。这里用 noisekit-spl，
+# import 包名（audio_core）与命令行入口（noisekit）保持不变。
+name = "noisekit-spl"
+version = "0.1.1"
+description = "Environmental noise monitoring with evidence capture: weighted dB(A)/Leq, FFT spectrum, threshold-triggered 5 s pre-buffer recordings, SQLite log and a single-file HTML report. Pure-Python analysis core, no Qt."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "NoiseKit contributors" }]
-keywords = ["acoustics", "noise", "spl", "sound-level-meter", "audio"]
+keywords = ["acoustics", "noise", "spl", "sound-level-meter", "decibel", "leq", "environmental-monitoring"]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Environment :: Win32 (MS Windows)",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Scientific/Engineering",
 ]
 dependencies = [
     "numpy>=1.26",
@@ -28,8 +37,17 @@ audio = ["sounddevice>=0.4.6"]
 gui = ["PySide6>=6.6"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
+[project.urls]
+Homepage = "https://github.com/ahooop/noisekit"
+Repository = "https://github.com/ahooop/noisekit"
+Issues = "https://github.com/ahooop/noisekit/issues"
+Changelog = "https://github.com/ahooop/noisekit/blob/main/CHANGELOG.md"
+
 [project.scripts]
+# `noisekit` 保留为对外命令名；`noisekit-spl` 与发行名一致，避免与 PyPI 上
+# 那个同名项目的 console script 互相覆盖时找不到自己的入口。
 noisekit = "audio_core.cli:main"
+noisekit-spl = "audio_core.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["audio_core*", "apps*"]

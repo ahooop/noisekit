@@ -1,14 +1,50 @@
 # NoiseKit
 
+简体中文 | [English](#english)
+
 > **用途声明**：NoiseKit 使用消费级麦克风配合软件计算声级，**不是计量认证仪器**（不符合 IEC 61672 / GB/T 3785 对 1 级或 2 级声级计的要求）。结果仅供个人参考、趋势对比与过程记录，**不得用于执法取证、工程验收或法定检测**。未经校准的读数一律标注为 dBFS 相对值。
 
 插上麦克风就能连续测环境噪声：实时看分贝曲线与频谱，超过阈值自动留证（前置缓冲录音 + 时间 + 峰值），一键导出可分享的报告。
 
 ![NoiseKit 主界面](docs/screenshot.png)
 
-> 状态：**v0.1.0**（首个可发布版本）。Windows 免安装包见 [Releases](../../releases)。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
+> 状态：**v0.1.1**。Windows 免安装包见 [Releases](../../releases)，Python 包在 PyPI 的发行名是 `noisekit-spl`（`noisekit` 已被一个无关项目占用，import 名仍是 `audio_core`）。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
 
-四种用法：
+<a id="english"></a>
+
+## English
+
+**NoiseKit** turns any consumer microphone into a continuous environmental-noise monitor that keeps *evidence*, not just numbers. Built for Windows; Python 3.11+, MIT.
+
+Plug in a mic and you get real-time dB(A)/Leq, a 2048-point FFT spectrum and a scrolling level curve. When the level stays above your threshold for a configurable duration, NoiseKit records the event: **5 seconds of pre-trigger audio**, a row in SQLite, and an HTML report with the curve, the event table and a disclaimer — one file, no external assets, double-click to open.
+
+Why the pre-buffer matters: if you only start recording after the threshold trips, the loudest part is already gone and playback holds just the tail of the noise. So the recorder always keeps the last 5 seconds rolling and writes them out at trigger time.
+
+- **Metrics** — instantaneous dB, A/C weighting, Fast/Slow/Impulse time weighting, Leq (1 s / 10 s / session), LAFmax, LCpeak
+- **Evidence** — 16-bit WAV with 5 s pre-buffer, metric frames at 10 Hz in SQLite (WAL), single-file HTML report + CSV export
+- **Alerts** — threshold + minimum duration + cooldown, so one continuous noise produces exactly one event
+- **Calibration** — manual offset or a wizard (enter a reference SPL, sample 2 s, the offset is computed and remembered per device)
+- **Packaging** — PyInstaller portable build for Windows, no Python required; a frozen-build smoke test runs on every CI build
+
+### Library use
+
+`audio_core` is the analysis engine and depends on numpy + scipy only — **no Qt, no network**, so other Python projects can measure noise instead of re-deriving IEC 61672 math:
+
+```bash
+pip install noisekit-spl        # distribution name on PyPI
+python -m audio_core.cli --source device
+noisekit --doctor               # same entry point, both script names work
+```
+
+The import package (`audio_core`) and the command (`noisekit`) keep their names; only the PyPI distribution is `noisekit-spl`, because `noisekit` was already taken there by an unrelated project.
+
+### Status
+
+99 tests, CI matrix over Linux/macOS/Windows × Python 3.11/3.12, `ruff` and an architecture check that keeps `audio_core` free of GUI imports. Windows portable build and per-version changelog in [Releases](../../releases).
+
+> **Not a certified sound level meter.** A consumer mic plus software math does not meet IEC 61672 (or GB/T 3785) class 1/2. Readings are for personal reference, trend comparison and record-keeping — not for enforcement, acceptance testing or legal metrology. Uncalibrated readings are labelled as relative dBFS.
+
+## 四种用法
 
 ```bash
 python -m apps.desktop.main                       # 桌面界面（推荐，默认自动留证）
@@ -81,6 +117,8 @@ python -m apps.desktop.main                       # 图形界面
 ```
 
 要求 Python ≥ 3.11。音频后端依赖 PortAudio（`sounddevice` 会自动带上）。
+
+只想把分析引擎当库用，不装界面依赖：`pip install noisekit-spl`（发行名，import 名仍是 `audio_core`）。
 
 ## 打包成可双击的程序
 

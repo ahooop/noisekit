@@ -2,6 +2,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化。
 
+## [0.1.1] - 2026-10-23
+
+### 变更
+
+- **PyPI 发行名改为 `noisekit-spl`**：`noisekit` 在 PyPI 已被一个无关项目（语音降噪数据集生成器）占用，直接用原名发布必然撞名。import 包名 `audio_core` 与命令 `noisekit` 保持不变，另加 `noisekit-spl` 命令别名，避免 console script 被同名包覆盖后找不到自己的入口
+- 包元数据补齐：英文 summary、`[project.urls]`（Homepage / Repository / Issues / Changelog）、Windows 与科学计算相关 classifier
+- README 顶部增加英文摘要（中文正文不变），方便英文读者与审核方快速判断项目
+- 版本号统一到 0.1.1（`pyproject.toml`、`audio_core.__version__` 与 README 状态行）
+
 ## [0.1.0] - 2026-10-22
 
 ### 新增
