@@ -1,0 +1,124 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  # Windows runner 默认 cp1252，中文日志会直接抛异常
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: "1"
+
+jobs:
+  windows:
+    name: build & release (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,audio,gui]" pyinstaller
+
+      - name: 发布前跑一遍测试
+        run: python -m pytest -q
+
+      - name: 打包
+        run: python scripts/build.py
+
+      - name: 冒烟测试（冻结依赖）
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'selftest.log'
+          $env:NOISEKIT_SELFTEST_LOG = $log
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = (Resolve-Path 'dist\NoiseKit\NoiseKit.exe').Path
+          $psi.Arguments = '--selftest-cli'
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $proc = [System.Diagnostics.Process]::Start($psi)
+          $finished = $proc.WaitForExit(180000)
+          if (-not $finished) { $proc.Kill() }
+          Write-Host $proc.StandardOutput.ReadToEnd()
+          Write-Host $proc.StandardError.ReadToEnd()
+          if (Test-Path $log) { Get-Content $log }
+          if (-not $finished) { throw 'selftest 超时未退出' }
+          if ($proc.ExitCode -ne 0) { throw "selftest 失败，退出码 $($proc.ExitCode)" }
+
+      - name: 压缩成发布包
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $zip = "NoiseKit-$version-windows-x64.zip"
+          Compress-Archive -Path dist/NoiseKit/* -DestinationPath $zip
+          $size = [math]::Round((Get-Item $zip).Length / 1MB, 0)
+          Write-Host "产物：$zip（$size MB）"
+          "ZIP_NAME=$zip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: 生成发布说明
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $zipName = "NoiseKit-$version-windows-x64.zip"
+          $content = Get-Content CHANGELOG.md -Raw -Encoding utf8
+          # 抽出「## [x.y.z]」到下一个版本标题之间的内容
+          $pattern = "(?ms)^## \[$([regex]::Escape($version))\][^\n]*\n.*?(?=^## \[|\z)"
+          $match = [regex]::Match($content, $pattern)
+
+          $lines = @()
+          if ($match.Success) {
+            $lines += $match.Value.Trim()
+          } else {
+            $lines += "## 变更"
+            $lines += ""
+            $lines += "本次发布的改动见仓库 CHANGELOG.md。"
+          }
+
+          $lines += ""
+          $lines += "## 下载与运行"
+          $lines += ""
+          $lines += "1. 下载下方的 $zipName"
+          $lines += "2. 解压到任意目录（不要放在需要管理员权限的 Program Files 下）"
+          $lines += "3. 双击 NoiseKit.exe"
+          $lines += ""
+          $lines += "免安装、不需要 Python 环境。首次启动时 Windows 可能提示「未知发布者」，选择「更多信息 → 仍要运行」。"
+          $lines += "如果程序打不开麦克风，请检查 Windows「设置 → 隐私和安全性 → 麦克风」里是否允许桌面应用访问。"
+          $lines += ""
+          $lines += "---"
+          $lines += ""
+          $lines += "> **用途声明**：NoiseKit 使用消费级麦克风配合软件计算声级，**不是计量认证仪器**"
+          $lines += "> （不符合 IEC 61672 / GB/T 3785 对 1 级或 2 级声级计的要求）。"
+          $lines += "> 结果仅供个人参考、趋势对比与过程记录，**不得用于执法取证、工程验收或法定检测**。"
+          $lines += "> 未经校准的读数一律标注为相对值。"
+
+          $lines -join "`n" | Out-File -FilePath release_notes.md -Encoding utf8
+          Write-Host "发布说明 $((Get-Item release_notes.md).Length) 字节"
+
+      - name: 创建 GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $version = $tag -replace '^v', ''
+          gh release create $tag $env:ZIP_NAME `
+            --title "NoiseKit $version" `
+            --notes-file release_notes.md `
+            --verify-tag
+
+      - name: 上传构建产物（备份）
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoiseKit-windows-release
+          path: dist/NoiseKit

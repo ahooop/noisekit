@@ -6,7 +6,7 @@
 
 ![NoiseKit 主界面](docs/screenshot.png)
 
-> 状态：**v0.1.0 开发中**。分析引擎、CLI、桌面界面、告警留证与报告导出均已可用（M1.0 → M1.2），还差打包成 exe 与校准向导（M1.3）。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
+> 状态：**v0.1.0**（首个可发布版本）。Windows 免安装包见 [Releases](../../releases)。设计规格见 [docs/superpowers/specs](docs/superpowers/specs/)，实现计划见 [docs/superpowers/plans](docs/superpowers/plans/)。
 
 四种用法：
 
