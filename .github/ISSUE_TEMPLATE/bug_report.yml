@@ -1,0 +1,86 @@
+name: Bug 报告
+description: 崩溃、读数异常、界面卡住、录音或报告不对等问题
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先确认一件事：NoiseKit 用消费级麦克风算声级，**不是计量认证仪器**。
+        「和校准过的声级计差 3 dB」通常不算 bug——除非你附上了校准过程与参考仪器型号。
+
+        能自己先跑一遍 `noisekit --doctor` 最好，排障信息基本都在里面。
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 现象与复现步骤
+      description: 预期是什么，实际是什么。能稳定复现就按 1/2/3 写清步骤。
+      placeholder: |
+        1. 打开界面，选设备 XXX
+        2. 阈值设为 60 dB，开始采集
+        3. 播放一段持续 30 秒的 70 dB 白噪
+        预期：生成一个事件
+        实际：两个事件，且第一个只有 3 秒音频
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: noisekit --doctor 输出
+      description: 完整粘贴即可（不含隐私）。如果用 Releases 里的免安装包，写「免安装包 + 版本号」。
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: Windows 11 23H2
+    validations:
+      required: true
+  - type: input
+    id: mic
+    attributes:
+      label: 麦克风型号
+      placeholder: 笔记本内置阵列 / USB 电容麦 XXX
+    validations:
+      required: true
+  - type: dropdown
+    id: entry
+    attributes:
+      label: 出问题的入口
+      options:
+        - 桌面界面（python -m apps.desktop.main）
+        - 桌面界面（Releases 免安装包）
+        - 命令行 noisekit
+        - 作为库使用 audio_core
+        - 打包脚本 scripts/build.py
+    validations:
+      required: true
+  - type: dropdown
+    id: reproducible
+    attributes:
+      label: 是否可稳定复现
+      options:
+        - 每次都能复现
+        - 偶发（给出频率）
+        - 只出现过一次
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 直接粘贴文本，或拖入图片。超过一屏请附文件而不是贴全文。
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我确认这不是「未校准读数与专业声级计存在差异」一类问题
+          required: true
+        - label: 我已搜索过现有 Issue，没有重复
+          required: true

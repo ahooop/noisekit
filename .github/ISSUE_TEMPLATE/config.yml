@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 读一遍 README 与排障说明
+    url: https://github.com/ahooop/noisekit#readme
+    about: 装不上、找不到设备、读数全是底噪，多半在这里就有答案
+  - name: 看已知的版本变更
+    url: https://github.com/ahooop/noisekit/blob/main/CHANGELOG.md
+    about: 确认你遇到的问题是不是已经在某个版本里修掉了

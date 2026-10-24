@@ -2,7 +2,14 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化。
 
-## [0.1.1] - 2026-10-23
+## [0.1.1] - 2026-10-24
+
+### 新增
+
+- 开源配套补齐：`CODE_OF_CONDUCT.md`、Issue 表单（Bug / 功能建议，带必填的排障字段）、PR 模板、Dependabot 每周依赖更新（数值底座的升级单独成组，避免与界面依赖混在一个 PR 里）
+- `.github/workflows/publish.yml`：tag 触发把 sdist 与 wheel 发到 PyPI，走 Trusted Publishing（OIDC），仓库里不存任何 token；构建后先装进干净环境跑一次 CLI，再放行上传
+- 发布手册 [docs/releasing.md](docs/releasing.md)：版本号四处同步、推标签、首次配置 PyPI、发布后核对与回滚
+- README 顶部加 CI / Release / License 徽章
 
 ### 变更
 

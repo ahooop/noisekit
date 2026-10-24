@@ -1,5 +1,9 @@
 # NoiseKit
 
+[![ci](https://github.com/ahooop/noisekit/actions/workflows/ci.yml/badge.svg)](https://github.com/ahooop/noisekit/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/ahooop/noisekit?sort=semver&label=release)](https://github.com/ahooop/noisekit/releases/latest)
+[![license](https://img.shields.io/github/license/ahooop/noisekit)](LICENSE)
+
 简体中文 | [English](#english)
 
 > **用途声明**：NoiseKit 使用消费级麦克风配合软件计算声级，**不是计量认证仪器**（不符合 IEC 61672 / GB/T 3785 对 1 级或 2 级声级计的要求）。结果仅供个人参考、趋势对比与过程记录，**不得用于执法取证、工程验收或法定检测**。未经校准的读数一律标注为 dBFS 相对值。
@@ -146,7 +150,12 @@ dist/NoiseKit/NoiseKit.exe --selftest       # 开窗口采 2 秒，验证界面�
 
 ## 参与
 
-见 [CONTRIBUTING.md](CONTRIBUTING.md)。Bug 与功能建议请开 Issue，请附上系统、设备型号与 `noisekit --doctor` 输出。
+见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+
+Bug 与功能建议请走 Issue 模板：报 Bug 会要求填系统、麦克风型号与 `noisekit --doctor` 输出，
+提功能请先说清「你遇到的具体麻烦」。不接受弱化免责声明、或为凑功能数量而加的 PR。
+
+发布流程（改版本号 → 推标签 → 自动出 Windows 包与 PyPI 包）见 [docs/releasing.md](docs/releasing.md)。
 
 ## 许可证
 
