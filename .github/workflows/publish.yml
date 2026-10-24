@@ -1,0 +1,67 @@
+name: publish
+
+# PyPI 发布走 Trusted Publishing（OIDC）：不需要在仓库里存任何 token，
+# 也不需要付费账号。前置条件是到 pypi.org 上登记「待发布」的发布者，
+# 步骤见 docs/releasing.md。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: "1"
+
+jobs:
+  build:
+    name: build & verify (sdist + wheel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 构建
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+          python -m build
+          python -m twine check dist/*
+
+      # 只构建成功不代表能装。装到干净环境里跑一遍 CLI，
+      # 把「元数据写错 / 入口点丢失 / 少打了一个子包」这类问题挡在发布之前。
+      - name: 安装冒烟（干净环境）
+        run: |
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install --upgrade pip
+          /tmp/verify/bin/pip install dist/*.whl
+          /tmp/verify/bin/noisekit --version
+          /tmp/verify/bin/noisekit --source synthetic --duration 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist/*
+
+  publish:
+    name: publish to PyPI
+    needs: build
+    # 配好 Trusted Publisher 后，到仓库 Settings → Variables 加 PYPI_PUBLISH=true。
+    # 没配之前这个 job 显示为 skipped，tag 推送不会因此变红。
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/noisekit-spl
+    permissions:
+      id-token: write # 申请 OIDC 令牌，交给 PyPI 校验来源
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1

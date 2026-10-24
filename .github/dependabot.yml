@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+    groups:
+      # numpy/scipy 这类数值底座升级往往要连带改测试容差，
+      # 单独成一个 PR，避免和界面依赖的升级混在一起看不清失败原因。
+      scientific:
+        patterns: ["numpy", "scipy"]
+      gui:
+        patterns: ["PySide6*"]
+      dev-tools:
+        patterns: ["pytest*", "ruff*", "pyinstaller*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
